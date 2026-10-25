@@ -2,10 +2,8 @@
 
 import { messagesCollection } from "@/lib/messages";
 import { allow, clientIpHash } from "@/lib/rate-limit";
+import { formFields } from "@/lib/request";
 import { contactSchema, toFormState, type FormState } from "@/lib/validation";
-
-const fields = (formData: FormData) =>
-  Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
 
 export async function sendMessage(_prev: FormState, formData: FormData): Promise<FormState> {
   // Bots fill every field; humans never see the hidden "website" field.
@@ -14,7 +12,7 @@ export async function sendMessage(_prev: FormState, formData: FormData): Promise
     return { error: "Too many messages from your network. Please try again in an hour, or message us on WhatsApp." };
   }
 
-  const parsed = contactSchema.safeParse(fields(formData));
+  const parsed = contactSchema.safeParse(formFields(formData));
   if (!parsed.success) return toFormState(parsed.error);
 
   await (await messagesCollection()).insertOne({

@@ -5,6 +5,9 @@ export * from "./blog-utils";
 
 type PostDoc = Omit<Post, "publishedAt"> & { publishedAt: Date };
 
+// Posts dated in the future are scheduled: hidden from the public site until then.
+const published = () => ({ publishedAt: { $lte: new Date() } });
+
 const toPost = (d: PostDoc): Post => ({ ...d, content: d.content ?? [], publishedAt: new Date(d.publishedAt).toISOString() });
 
 export async function getPosts(): Promise<{ posts: Post[]; error?: string }> {
@@ -12,7 +15,7 @@ export async function getPosts(): Promise<{ posts: Post[]; error?: string }> {
     const db = await getDb();
     const docs = await db
       .collection<PostDoc>("posts")
-      .find({}, { projection: { _id: 0, content: 0 } })
+      .find(published(), { projection: { _id: 0, content: 0 } })
       .sort({ publishedAt: -1 })
       .toArray();
     return { posts: docs.map(toPost) };
@@ -24,18 +27,19 @@ export async function getPosts(): Promise<{ posts: Post[]; error?: string }> {
 
 type PostPage = { post: Post | null; related: Post[]; prev: Post | null; next: Post | null };
 
-export async function getPost(slug: string): Promise<PostPage> {
+/** includeScheduled: the admin editor also needs posts that aren't live yet. */
+export async function getPost(slug: string, includeScheduled = false): Promise<PostPage> {
   const empty: PostPage = { post: null, related: [], prev: null, next: null };
   try {
     const db = await getDb();
     const col = db.collection<PostDoc>("posts");
-    const doc = await col.findOne({ slug }, { projection: { _id: 0 } });
+    const doc = await col.findOne(includeScheduled ? { slug } : { slug, ...published() }, { projection: { _id: 0 } });
     if (!doc) return empty;
     const light = { projection: { _id: 0, content: 0 } };
     const [others, older, newer] = await Promise.all([
-      col.find({ slug: { $ne: slug } }, light).sort({ publishedAt: -1 }).limit(3).toArray(),
+      col.find({ slug: { $ne: slug }, ...published() }, light).sort({ publishedAt: -1 }).limit(3).toArray(),
       col.find({ publishedAt: { $lt: doc.publishedAt } }, light).sort({ publishedAt: -1 }).limit(1).toArray(),
-      col.find({ publishedAt: { $gt: doc.publishedAt } }, light).sort({ publishedAt: 1 }).limit(1).toArray(),
+      col.find({ publishedAt: { $gt: doc.publishedAt, $lte: new Date() } }, light).sort({ publishedAt: 1 }).limit(1).toArray(),
     ]);
     return {
       post: toPost(doc),

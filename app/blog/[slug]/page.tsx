@@ -9,7 +9,7 @@ import ReadingProgress from "@/components/ReadingProgress";
 import ArticleToc from "@/components/ArticleToc";
 import ShareBar from "@/components/ShareBar";
 import BackToTop from "@/components/BackToTop";
-import { formatDate, getPost, headingsOf, slugify, unsplash, type Block } from "@/lib/blog";
+import { formatDate, getPost, headingsOf, unsplash, type Block } from "@/lib/blog";
 import { caveat, literata } from "@/lib/fonts";
 import { absoluteUrl, getSiteSeo, jsonLd } from "@/lib/seo";
 import "../../services/services.css";
@@ -53,18 +53,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 function Content({ blocks }: { blocks: Block[] }) {
+  const ids = headingsOf(blocks).map((h) => h.id);
   let chapter = 0;
   return (
     <>
       {blocks.map((b, i) => {
         switch (b.type) {
-          case "h2":
+          case "h2": {
+            const n = chapter++;
             return (
-              <h2 key={i} id={slugify(b.text)} className="rd-h2">
-                <span className="rd-chap">Chapter {roman[chapter++] ?? chapter}</span>
+              <h2 key={i} id={ids[n]} className="rd-h2">
+                <span className="rd-chap">Chapter {roman[n] ?? n + 1}</span>
                 <span className="rd-h-text">{b.text.replace(/^\d+\.\s*/, "")}</span>
               </h2>
             );
+          }
           case "quote":
             return (
               <blockquote key={i} className="rd-quote">
@@ -82,8 +85,8 @@ function Content({ blocks }: { blocks: Block[] }) {
           case "ul":
             return (
               <ul key={i} className="rd-list">
-                {b.items.map((it) => (
-                  <li key={it}>{it}</li>
+                {b.items.map((it, j) => (
+                  <li key={j}>{it}</li>
                 ))}
               </ul>
             );

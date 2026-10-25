@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ObjectId, type Collection, type Document } from "mongodb";
+import { MongoServerError, ObjectId, type Collection, type Document } from "mongodb";
 import { login, logout, requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/mongodb";
 import { markupToBlocks, wordCount } from "@/lib/markup";
@@ -18,6 +18,7 @@ import {
   type FormState,
 } from "@/lib/validation";
 import { PAGES } from "@/lib/seo";
+import { formFields as fields } from "@/lib/request";
 import { randomInt } from "node:crypto";
 import { getGiveaway, giveawayCollections, publicName } from "@/lib/giveaways";
 import { giveawaySchema } from "@/lib/validation";
@@ -47,8 +48,19 @@ async function uniqueSlug(col: Collection<Document>, title: string) {
   return slug;
 }
 
-const fields = (formData: FormData) =>
-  Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
+// A unique index on slug, so two saves at the same moment can't both take the same slug.
+const slugIndexes = new Map<string, Promise<unknown>>();
+function ensureSlugIndex(col: Collection<Document>) {
+  if (!slugIndexes.has(col.collectionName)) {
+    const p = col.createIndex({ slug: 1 }, { unique: true }).catch((err) => {
+      // Usually means the collection already has duplicate slugs: fix those, then restart.
+      console.error(`[admin] could not create unique slug index on ${col.collectionName}:`, err);
+      slugIndexes.delete(col.collectionName);
+    });
+    slugIndexes.set(col.collectionName, p);
+  }
+  return slugIndexes.get(col.collectionName);
+}
 
 /** Shared create/update flow: originalSlug present = edit, absent = create. */
 async function upsert(
@@ -69,9 +81,19 @@ async function upsert(
     if (res.matchedCount === 0) return { error: "This item no longer exists." };
     await extra?.(original);
   } else {
-    const slug = await uniqueSlug(col, title);
-    await col.insertOne({ ...doc, slug, createdAt: new Date(), ...stamp });
-    await extra?.(slug);
+    await ensureSlugIndex(col);
+    for (let attempt = 0; ; attempt++) {
+      const slug = await uniqueSlug(col, title);
+      try {
+        await col.insertOne({ ...doc, slug, createdAt: new Date(), ...stamp });
+      } catch (err) {
+        // Someone else took this slug between the check and the insert: pick the next free one.
+        if (attempt < 5 && err instanceof MongoServerError && err.code === 11000) continue;
+        throw err;
+      }
+      await extra?.(slug);
+      break;
+    }
   }
   return undefined;
 }
@@ -177,11 +199,12 @@ export async function saveGiveaway(_prev: FormState, formData: FormData): Promis
 
   const original = formData.get("originalSlug");
   const existing = isSlug(original) ? await getGiveaway(original, true) : null;
+  const sameWinner = !!d.winnerName && existing?.winner?.name === d.winnerName;
   const winner = d.winnerName
     ? {
         name: d.winnerName,
         note: d.winnerNote,
-        announcedAt: existing?.winner?.announcedAt ? new Date(existing.winner.announcedAt) : new Date(),
+        announcedAt: sameWinner && existing?.winner?.announcedAt ? new Date(existing.winner.announcedAt) : new Date(),
       }
     : null;
 
@@ -197,7 +220,13 @@ export async function saveGiveaway(_prev: FormState, formData: FormData): Promis
     published: d.published,
     winner,
   };
-  const res = await upsert("giveaways", formData, doc, d.title);
+  const res = await upsert("giveaways", formData, doc, d.title, async (slug) => {
+    // The winner was cleared or renamed by hand, so the randomly picked entry no longer matches it.
+    if (!sameWinner) {
+      const { giveaways } = await giveawayCollections();
+      await giveaways.updateOne({ slug }, { $unset: { winnerEntry: "" } });
+    }
+  });
   if (res) return res;
   revalidateGiveaways();
   redirect("/admin/giveaways?saved=1");

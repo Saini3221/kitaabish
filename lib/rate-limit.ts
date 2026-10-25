@@ -1,17 +1,16 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { headers } from "next/headers";
+import { MongoServerError } from "mongodb";
 import { getDb } from "./mongodb";
+import { clientIp } from "./request";
 
 // Simple fixed-window rate limit for public forms, stored in MongoDB with a TTL index.
 type Hit = { key: string; count: number; expiresAt: Date };
 let ready: Promise<unknown> | null = null;
 
 export async function clientIpHash() {
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for")?.split(",")[0] || h.get("x-real-ip") || "local").trim();
   // Store only a hash of the IP, never the raw address.
-  return createHash("sha256").update(`kb:${ip}`).digest("hex").slice(0, 32);
+  return createHash("sha256").update(`kb:${await clientIp()}`).digest("hex").slice(0, 32);
 }
 
 /** Returns false once `key` has been used more than `max` times in `windowMinutes`. */
@@ -24,16 +23,26 @@ export async function allow(action: string, max: number, windowMinutes: number):
   await ready;
   const key = `${action}|${await clientIpHash()}`;
   const now = new Date();
-  const existing = await col.findOne({ key, expiresAt: { $gt: now } });
-  if (!existing) {
-    await col.updateOne(
-      { key },
-      { $set: { count: 1, expiresAt: new Date(now.getTime() + windowMinutes * 60_000) } },
-      { upsert: true },
-    );
-    return true;
+  // One atomic update: start a fresh window if there is none (or it expired), otherwise count up.
+  // Concurrent requests can't all slip past the limit between a read and a write.
+  const update = [
+    { $set: { fresh: { $or: [{ $not: ["$expiresAt"] }, { $lte: ["$expiresAt", now] }] } } },
+    {
+      $set: {
+        count: { $cond: ["$fresh", 1, { $add: ["$count", 1] }] },
+        expiresAt: { $cond: ["$fresh", new Date(now.getTime() + windowMinutes * 60_000), "$expiresAt"] },
+      },
+    },
+    { $unset: "fresh" },
+  ];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const hit = await col.findOneAndUpdate({ key }, update, { upsert: true, returnDocument: "after" });
+      return (hit?.count ?? 1) <= max;
+    } catch (err) {
+      // Two first-time requests raced to insert the same key; the retry updates the winner's doc.
+      if (attempt === 0 && err instanceof MongoServerError && err.code === 11000) continue;
+      throw err;
+    }
   }
-  if (existing.count >= max) return false;
-  await col.updateOne({ key }, { $inc: { count: 1 } });
-  return true;
 }

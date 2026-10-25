@@ -2,9 +2,10 @@ import "server-only";
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { cache } from "react";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "./mongodb";
+import { clientIp } from "./request";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: object) => Promise<Buffer>;
 
@@ -38,11 +39,6 @@ export async function verifyPassword(password: string, stored: string): Promise<
 const DUMMY_HASH = `scrypt$${PARAMS.N}$${PARAMS.r}$${PARAMS.p}$${randomBytes(16).toString("base64")}$${randomBytes(64).toString("base64")}`;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
-
-async function clientIp() {
-  const h = await headers();
-  return (h.get("x-forwarded-for")?.split(",")[0] || h.get("x-real-ip") || "local").trim();
-}
 
 let indexesReady: Promise<unknown> | null = null;
 async function collections() {

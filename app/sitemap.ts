@@ -22,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const posts = await (await getDb())
       .collection<{ slug: string; publishedAt: Date; updatedAt?: Date; seo?: { noindex?: boolean } }>("posts")
-      .find({ "seo.noindex": { $ne: true } }, { projection: { _id: 0, slug: 1, publishedAt: 1, updatedAt: 1 } })
+      .find({ "seo.noindex": { $ne: true }, publishedAt: { $lte: new Date() } }, { projection: { _id: 0, slug: 1, publishedAt: 1, updatedAt: 1 } })
       .toArray();
     for (const p of posts) {
       entries.push({

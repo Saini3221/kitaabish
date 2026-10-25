@@ -18,13 +18,13 @@ import { INSTAGRAM_URL, WHATSAPP_NUMBER } from "@/lib/contact";
 import { getSpotlightGiveaway } from "@/lib/giveaways";
 import GiveawayTicket from "@/components/giveaways/GiveawayTicket";
 import "./giveaways/giveaways.css";
+import "./services/services.css";
+import "./portfolio/portfolio.css";
+import "./blog/blog.css";
 
 export async function generateMetadata() {
   return pageMetadata("home");
 }
-import "./services/services.css";
-import "./portfolio/portfolio.css";
-import "./blog/blog.css";
 
 // Recommended reads and latest posts come from MongoDB; refresh at most once a minute.
 export const revalidate = 60;

@@ -34,14 +34,26 @@ export type PostSeo = {
 export const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
 
-export const slugify = (s: string) =>
+// Anchor id for a heading. Keeps letters in any script (Hindi too), not only a–z.
+const anchorId = (s: string) =>
   s
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
+    .replace(/(^-|-$)/g, "") || "section";
 
-// Section headings (for the table of contents), with ids matching the rendered <h2>s.
-export const headingsOf = (blocks: Block[]) =>
-  blocks.flatMap((b) => (b.type === "h2" ? [{ id: slugify(b.text), text: b.text.replace(/^\d+\.\s*/, "") }] : []));
+// Section headings (for the table of contents), in order, with ids matching the rendered <h2>s.
+// Repeated headings get -2, -3… so every id is unique.
+export const headingsOf = (blocks: Block[]) => {
+  const seen = new Map<string, number>();
+  return blocks.flatMap((b) => {
+    if (b.type !== "h2") return [];
+    const base = anchorId(b.text);
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return [{ id: n > 1 ? `${base}-${n}` : base, text: b.text.replace(/^\d+\.\s*/, "") }];
+  });
+};
 
 export const unsplash =(url: string, w: number) => `${url}?w=${w}&q=75&auto=format&fit=crop`;

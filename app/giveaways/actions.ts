@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { MongoServerError } from "mongodb";
 import { getGiveaway, giveawayCollections, statusOf } from "@/lib/giveaways";
 import { allow, clientIpHash } from "@/lib/rate-limit";
+import { formFields } from "@/lib/request";
 import { entrySchema, subscribeSchema, toFormState, type FormState } from "@/lib/validation";
 
 let indexesReady: Promise<unknown> | null = null;
@@ -17,9 +18,6 @@ async function ensureIndexes() {
   await indexesReady;
 }
 
-const fields = (formData: FormData) =>
-  Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
-
 // Bots fill every field; humans never see the hidden "website" field.
 const isBot = (formData: FormData) => String(formData.get("website") ?? "").length > 0;
 
@@ -29,7 +27,7 @@ export async function enterGiveaway(_prev: FormState, formData: FormData): Promi
     return { error: "Too many entries from your network. Please try again in an hour." };
   }
 
-  const parsed = entrySchema.safeParse(fields(formData));
+  const parsed = entrySchema.safeParse(formFields(formData));
   if (!parsed.success) return toFormState(parsed.error);
   const { slug, name, email, whatsapp, instagram } = parsed.data;
 
@@ -62,22 +60,29 @@ export async function subscribeUpdates(_prev: FormState, formData: FormData): Pr
     return { error: "Too many requests. Please try again in an hour." };
   }
 
-  const parsed = subscribeSchema.safeParse(fields(formData));
+  const parsed = subscribeSchema.safeParse(formFields(formData));
   if (!parsed.success) return toFormState(parsed.error);
   const { name, email, whatsapp } = parsed.data;
 
   await ensureIndexes();
   const { subscribers } = await giveawayCollections();
   const filter = email ? { email } : { whatsapp };
-  try {
-    await subscribers.updateOne(
+  // Only set what was filled in, so a later sign-up with just one contact doesn't erase the other.
+  const save = (withWhatsapp: boolean) =>
+    subscribers.updateOne(
       filter,
-      { $set: { name, email, whatsapp, source: "giveaways" }, $setOnInsert: { createdAt: new Date() } },
+      {
+        $set: { ...(name && { name }), ...(email && { email }), ...(withWhatsapp && whatsapp && { whatsapp }), source: "giveaways" },
+        $setOnInsert: { createdAt: new Date() },
+      },
       { upsert: true },
     );
+  try {
+    await save(true);
   } catch (err) {
-    // The WhatsApp number is already registered under another email — that's fine.
-    if (!(err instanceof MongoServerError && err.code === 11000)) throw err;
+    if (!(email && whatsapp && err instanceof MongoServerError && err.code === 11000)) throw err;
+    // The WhatsApp number is already registered under another email: save this email without it.
+    await save(false);
   }
   return { success: "You're on the list! We'll let you know as soon as the next giveaway goes live. 🎁" };
 }

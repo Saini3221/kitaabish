@@ -11,7 +11,7 @@ export default async function EditPost({ params }: { params: Promise<{ slug: str
   await requireAdmin();
   const { slug } = await params;
   if (!isSlug(slug)) notFound();
-  const [{ post }, { siteName, siteUrl, titleTemplate }] = await Promise.all([getPost(slug), getSiteSeo()]);
+  const [{ post }, { siteName, siteUrl, titleTemplate }] = await Promise.all([getPost(slug, true), getSiteSeo()]);
   if (!post) notFound();
 
   return (

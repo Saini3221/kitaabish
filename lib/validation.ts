@@ -144,6 +144,22 @@ const postSeo = {
   seoNoindex: checkbox,
 };
 
+// Unsplash photos only; we store the bare URL and the site adds its own size parameters.
+const unsplashUrl = (label: string) =>
+  z
+    .string()
+    .trim()
+    .url(`${label} must be a valid URL`)
+    .refine((u) => {
+      try {
+        const url = new URL(u);
+        return url.protocol === "https:" && url.hostname === "images.unsplash.com";
+      } catch {
+        return false;
+      }
+    }, `${label} must be an https://images.unsplash.com/… URL`)
+    .transform((u) => u.split("?")[0]);
+
 export const postSchema = z.object({
   ...postSeo,
   title: text(160, "Title"),
@@ -153,20 +169,7 @@ export const postSchema = z.object({
   authorName: text(80, "Author name"),
   authorRole: optionalText(120),
   publishedAt: z.coerce.date({ invalid_type_error: "Pick a publish date" }),
-  coverUrl: z
-    .string()
-    .trim()
-    .url("Cover must be a valid URL")
-    .refine((u) => {
-      try {
-        const url = new URL(u);
-        return url.protocol === "https:" && url.hostname === "images.unsplash.com";
-      } catch {
-        return false;
-      }
-    }, "Cover image must be an https://images.unsplash.com/… URL")
-    // Store the bare photo URL; the site adds its own size parameters.
-    .transform((u) => u.split("?")[0]),
+  coverUrl: unsplashUrl("Cover image"),
   coverAlt: text(160, "Cover description"),
   coverCredit: optionalText(80),
   featured: checkbox,
@@ -174,20 +177,6 @@ export const postSchema = z.object({
 });
 
 // ---------- Giveaways ----------
-const unsplashUrl = z
-  .string()
-  .trim()
-  .url("Image must be a valid URL")
-  .refine((u) => {
-    try {
-      const url = new URL(u);
-      return url.protocol === "https:" && url.hostname === "images.unsplash.com";
-    } catch {
-      return false;
-    }
-  }, "Image must be an https://images.unsplash.com/… URL")
-  .transform((u) => u.split("?")[0]);
-
 // <input type="datetime-local"> gives "2026-11-01T18:00" — interpret it as India time.
 const istDateTime = (label: string) =>
   z
@@ -213,7 +202,7 @@ export const giveawaySchema = z
           .slice(0, 15),
       )
       .refine((r) => r.every((l) => l.length <= 200), "Keep each rule under 200 characters"),
-    imageUrl: unsplashUrl,
+    imageUrl: unsplashUrl("Image"),
     imageAlt: text(160, "Image description"),
     startsAt: istDateTime("start"),
     endsAt: istDateTime("end"),
@@ -293,6 +282,7 @@ export function toFormState(err: z.ZodError): FormState {
   return { error: "Please fix the highlighted fields.", fieldErrors };
 }
 
+/** URL slug for a saved item (ASCII only, so it passes isSlug). */
 export const slugify = (s: string) =>
   s
     .toLowerCase()
