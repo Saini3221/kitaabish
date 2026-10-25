@@ -1,0 +1,162 @@
+/* =====================================================================
+   BLOG LISTING — "The Kitaabish Journal"
+   ===================================================================== */
+.blog {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 1rem 16px clamp(3rem, 7vw, 5rem);
+}
+
+/* ---------- Post card ---------- */
+.post-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 20px 40px -30px rgba(10, 10, 40, 0.45);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease;
+}
+.post-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 30px 50px -28px rgba(10, 10, 40, 0.5);
+}
+.post-card-img {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #eee;
+}
+.post-card-img img {
+  object-fit: cover;
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.post-card:hover .post-card-img img {
+  transform: scale(1.07);
+}
+.post-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 1;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+.post-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 1.3rem 1.4rem 1.5rem;
+}
+.post-meta {
+  font-size: 0.78rem;
+  color: #999;
+}
+.post-card-body h3 {
+  margin: 0.5rem 0 0.6rem;
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  line-height: 1.25;
+  color: var(--ink);
+  transition: color 0.3s ease;
+}
+.post-card:hover h3 {
+  color: var(--navy);
+}
+.post-card-body p {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: #555;
+}
+.post-more {
+  margin-top: auto;
+  padding-top: 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--red);
+}
+.post-more span {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+.post-card:hover .post-more span {
+  transform: translateX(5px);
+}
+
+/* Featured: image and text side by side */
+.blog-featured {
+  position: relative;
+  margin-bottom: 3rem;
+}
+.blog-featured-tag {
+  position: absolute;
+  top: -12px;
+  left: 24px;
+  z-index: 2;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #3a2600;
+  background: linear-gradient(180deg, #ffe08a, #f2b233);
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.3);
+}
+.post-card-featured {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+}
+.post-card-featured .post-card-img {
+  aspect-ratio: auto;
+  min-height: 380px;
+}
+.post-card-featured .post-card-body {
+  justify-content: center;
+  padding: 2.4rem;
+}
+.post-card-featured h3 {
+  font-size: clamp(1.6rem, 2.6vw, 2.2rem);
+}
+.post-card-featured p {
+  font-size: 1rem;
+}
+
+.blog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  list-style: none;
+}
+.blog-grid > li {
+  list-style: none;
+}
+
+@media (max-width: 900px) {
+  .blog-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .post-card-featured {
+    grid-template-columns: 1fr;
+  }
+  .post-card-featured .post-card-img {
+    min-height: 0;
+    aspect-ratio: 16 / 10;
+  }
+  .post-card-featured .post-card-body {
+    padding: 1.6rem;
+  }
+}
+@media (max-width: 600px) {
+  .blog-grid {
+    grid-template-columns: 1fr;
+  }
+}
